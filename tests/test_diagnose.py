@@ -101,7 +101,11 @@ def test_time_axis_found_via_control_phase():
     """Controlling time alone stabilizes the flake, so time is swept first."""
     runner = FakeRunner(
         [
-            ("baseline", ["pass", ("fail", FP)]),
+            # 8/10 baseline: strong enough that 5 clean control runs clear the
+            # two-sample Fisher bar (runs_needed_to_stabilize(8,10)==3), so the
+            # stabilizer is CONCLUSIVE. A 5/10 baseline would need 7 clean runs
+            # and would honestly be labelled a lead, not a conclusion.
+            ("baseline", [("fail", FP), ("fail", FP), ("fail", FP), "pass"]),
             ("control: all axes", ["pass"]),  # everything frozen -> stable
             ("control: time", ["pass"]),  # time alone -> stable: the stabilizer
             ("control: rng", [("fail", FP), "pass"]),
@@ -120,6 +124,29 @@ def test_time_axis_found_via_control_phase():
     provocations = runner.labels_matching("provoke:")
     assert "time" in provocations[0]
     assert any("← stabilizer" in row.note for row in d.evidence)
+
+
+def test_inconclusive_stabilizer_is_a_lead_not_a_conclusion():
+    """A 5/10 baseline stabilized by only 5 clean control runs is honestly a
+    lead: the two-sample Fisher test needs 7 (5 clean runs is p=0.084), so the
+    control evidence is 'inconclusive' and a warning says how many it would take.
+    The strong claim still comes from the provoke->verify repro below."""
+    runner = FakeRunner(
+        [
+            ("baseline", ["pass", ("fail", FP)]),  # 5/10
+            ("control: all axes", ["pass"]),  # 5 clean runs — stabilized but weak
+            ("control: time", ["pass"]),
+            ("control: rng", [("fail", FP), "pass"]),
+            ("provoke: time frozen @ month-end", [("fail", FP)]),
+            ("verify: time frozen @ month-end", [("fail", FP)]),
+            ("counterfactual", ["pass"]),
+            ("provoke", ["pass"]),
+        ]
+    )
+    d = run(runner)
+    assert any("inconclusive" in row.note for row in d.evidence)
+    assert any("needs 7 to be significant" in w and "a lead, not a conclusion" in w
+               for w in d.warnings)
 
 
 def test_control_phase_skipped_for_quiet_baseline():
