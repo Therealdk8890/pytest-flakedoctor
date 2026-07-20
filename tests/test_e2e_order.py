@@ -15,6 +15,8 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 
+from _support import pytest_argv  # noqa: E402  (tests dir is on sys.path)
+
 # A classic order dependency via leaked module-global state. The victim passes
 # alone (the global starts empty) but fails after the polluter mutates it.
 # Interposed innocent tests give the bisection something to narrow away.
@@ -55,7 +57,7 @@ def _env():
 
 def _pytest(cwd, args, env=None, timeout=600):
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "flakedoctor._plugin", *args],
+        pytest_argv(*args),
         cwd=str(cwd),
         env=env or _env(),
         capture_output=True,

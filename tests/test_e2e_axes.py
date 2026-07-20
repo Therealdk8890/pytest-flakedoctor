@@ -20,6 +20,8 @@ hermetic = pytest.importorskip("hermetic", reason="hermetic-sandbox drives these
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 
+from _support import pytest_argv  # noqa: E402  (tests dir is on sys.path)
+
 # Fails only when the frozen clock lands in 2020 — the doctor's adversarial
 # instants are all in 2020, while the real clock never is. Anchoring on the
 # real year (rather than on "is today month-end?") keeps the unperturbed
@@ -75,7 +77,7 @@ def _env():
 
 def _pytest(cwd, args, env=None, timeout=600):
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "flakedoctor._plugin", *args],
+        pytest_argv(*args),
         cwd=str(cwd),
         env=env or _env(),
         capture_output=True,

@@ -15,6 +15,8 @@ hermetic = pytest.importorskip("hermetic", reason="the sandbox axes need hermeti
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 
+from _support import pytest_argv  # noqa: E402  (tests dir is on sys.path)
+
 TIME_FLAKY = '''\
 import datetime
 
@@ -34,7 +36,7 @@ def _env():
 
 def _pytest(cwd, args, env=None, timeout=300):
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "flakedoctor._plugin", *args],
+        pytest_argv(*args),
         cwd=str(cwd),
         env=env or _env(),
         capture_output=True,

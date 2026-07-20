@@ -27,13 +27,14 @@ def run_doctor(tmp_path):
         env.pop("FLAKEDOCTOR_CHILD", None)
         env.pop("FLAKEDOCTOR_PROBE", None)
         env.pop("FLAKEDOCTOR_RESULT_FILE", None)
+        from _support import plugin_load_args
+
         argv = [
             sys.executable,
             "-m",
             "pytest",
             select,
-            "-p",
-            "flakedoctor._plugin",
+            *plugin_load_args(),
             "--doctor",
             "--doctor-json",
             str(json_path),

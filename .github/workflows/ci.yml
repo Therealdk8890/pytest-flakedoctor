@@ -55,6 +55,26 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+  integration:
+    # A couple of tests exercise real interoperation with optional third-party
+    # pytest plugins (pytest-asyncio, pytest-randomly) that the matrix does not
+    # install, so they importorskip there. Run them here with everything present.
+    name: integration (optional plugins)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install with optional plugins
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[interleave,dev]"
+      - name: Run full suite
+        # pytest-randomly must stay installed (a child test drives it) but not
+        # shuffle this parent run, which is meant to be deterministic.
+        run: pytest -q -p no:randomly
+
   build:
     name: build & metadata check
     runs-on: ubuntu-latest

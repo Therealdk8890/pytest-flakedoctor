@@ -20,6 +20,8 @@ pytest.importorskip("hermetic", reason="the doctor's other axes need hermetic-sa
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 
+from _support import pytest_argv  # noqa: E402  (tests dir is on sys.path)
+
 # A lost-update race: two threads read-modify-write a shared cell without a lock.
 RACE = '''\
 import threading
@@ -99,7 +101,7 @@ def _env():
 
 def _pytest(cwd, args, env=None, timeout=300):
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "flakedoctor._plugin", *args],
+        pytest_argv(*args),
         cwd=str(cwd),
         env=env or _env(),
         capture_output=True,

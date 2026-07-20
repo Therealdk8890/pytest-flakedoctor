@@ -14,6 +14,8 @@ from flakedoctor._axes import repro_command
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 
+from _support import pytest_argv  # noqa: E402  (tests dir is on sys.path)
+
 FLAKY_BODY = '''\
 def test_first_fruit():
     fruits = {"apple", "banana", "cherry", "date", "elderberry", "fig"}
@@ -33,7 +35,7 @@ def _env():
 
 def _run_pytest(cwd, args, env=None, timeout=300):
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "flakedoctor._plugin", *args],
+        pytest_argv(*args),
         cwd=str(cwd),
         env=env or _env(),
         capture_output=True,
