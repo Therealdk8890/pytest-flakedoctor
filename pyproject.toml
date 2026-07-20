@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-flakedoctor"
+version = "0.1.0"
+description = "The flaky-test doctor: diagnoses WHY a test is flaky and hands you a deterministic reproduction"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Danny Kissel" }]
+keywords = [
+    "pytest",
+    "flaky",
+    "flaky-tests",
+    "heisenbug",
+    "testing",
+    "nondeterminism",
+    "reproducibility",
+    "diagnosis",
+    "bisection",
+    "hashseed",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+# hermetic-sandbox powers the time/rng/network/fs axes. Note the distribution
+# name differs from the import name, which is `hermetic`.
+dependencies = ["pytest>=7", "hermetic-sandbox>=0.1"]
+
+[project.urls]
+Homepage = "https://github.com/Therealdk8890/pytest-flakedoctor"
+Repository = "https://github.com/Therealdk8890/pytest-flakedoctor"
+Changelog = "https://github.com/Therealdk8890/pytest-flakedoctor/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Therealdk8890/pytest-flakedoctor/issues"
+
+[project.optional-dependencies]
+# The thread-interleaving axis. interleave-test needs Python >=3.12 (sys.monitoring),
+# while the core supports >=3.10, so it is an opt-in extra, not a core dependency.
+interleave = ["interleave-test>=0.1.0; python_version >= '3.12'"]
+dev = ["pytest>=7", "hermetic-sandbox>=0.1"]
+
+[project.entry-points.pytest11]
+flakedoctor = "flakedoctor._plugin"
+
+[project.scripts]
+flakedoctor = "flakedoctor._cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+flakedoctor = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

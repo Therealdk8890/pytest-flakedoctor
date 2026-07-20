@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }} · pytest${{ matrix.pytest }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        pytest: ["7", "8", "9"]
+        exclude:
+          # pytest 7.x supports CPython up to 3.12; 8.x up to 3.13. pytest 9.x
+          # is the one that carries 3.14. Drop the combinations that cannot
+          # resolve so the matrix stays green for real reasons.
+          - { python-version: "3.13", pytest: "7" }
+          - { python-version: "3.14", pytest: "7" }
+          - { python-version: "3.14", pytest: "8" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # The [interleave] extra is marker-gated on python_version >= '3.12',
+          # so this installs interleave-test only where it is supported; on 3.10
+          # and 3.11 the interleave tests importorskip cleanly.
+          pip install ".[interleave]"
+          # Pin the pytest major line under test (may downgrade from the default).
+          pip install "pytest==${{ matrix.pytest }}.*"
+
+      - name: Show environment
+        run: |
+          python --version
+          python -c "import pytest; print('pytest', pytest.__version__)"
+          python -c "import importlib.util as u; print('interleave-test:', 'yes' if u.find_spec('interleave_test') else 'no')"
+          python -c "import importlib.util as u; print('hermetic-sandbox:', 'yes' if u.find_spec('hermetic') else 'no')"
+
+      - name: Run tests
+        run: pytest -q
+
+  build:
+    name: build & metadata check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+      - name: Check metadata
+        run: python -m twine check dist/*
