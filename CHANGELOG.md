@@ -6,7 +6,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.1.0] — unreleased
+### Changed
+
+- **Stabilization and elevation significance now use a one-sided Fisher exact
+  test** instead of testing the observed count against the baseline *point
+  estimate* as if it were the true rate. The old approach overstated evidence
+  with small samples — e.g. it called 0/5 clean control runs against a 5/10
+  baseline significant (`0.5**5 = 0.03`) when the honest two-sample p-value is
+  ~0.084. This only affected the softer "stabilizer" / "elevates failure rate"
+  language, not the deterministic-repro path (which already used an exact
+  Clopper–Pearson bound), but it conflicted with the project's core promise of
+  never claiming more than the evidence supports. A 5/10 baseline now correctly
+  needs 7 clean control runs, not 5, before a stabilizer is called conclusive.
+
+## [0.1.0] — 2026-07-20
 
 The first release. `pytest <nodeid> --doctor` diagnoses *why* a test is flaky
 and hands you a deterministic reproduction — it never guesses a cause the
@@ -17,7 +30,7 @@ numbers don't support, and it says "I don't know" when they don't.
 - **The diagnosis loop.** A control → provoke → verify → counterfactual pipeline
   that isolates one axis at a time and reports a Clopper–Pearson confidence
   bound, so a claim is backed by a measured reproduction rate.
-- **Six perturbation axes**, each catching a distinct cause of flakiness:
+- **Seven perturbation axes**, each catching a distinct cause of flakiness:
   - `order` — a *polluter* test that leaks state a later test depends on, found
     by running the victim after a shrinking prefix of the suite.
   - `interleave` — a thread race or deadlock, found by driving the test through

@@ -39,6 +39,19 @@ the counterfactual, and prints this:
 Three minutes ago this failed once a week. Now it fails on demand. Paste the
 command into the bug report and fix it.
 
+## Install
+
+```sh
+pip install pytest-flakedoctor                 # order, time, rng, network, fs, hashseed
+pip install "pytest-flakedoctor[interleave]"   # + the thread-interleaving axis (Python ≥3.12)
+```
+
+Requires Python ≥3.10. Then point `--doctor` at a flaky test:
+
+```sh
+pytest path/to/test.py::test_name --doctor
+```
+
 ## Usage
 
 ```sh
@@ -186,10 +199,11 @@ unattributed is reported rather than dropped.
 
 ## Status
 
-Alpha; not yet on PyPI. Working today: the subprocess engine, the full
-control → provoke → verify → counterfactual loop, five axes (time, rng,
-network, fs, hashseed), failure fingerprinting, repro blobs, terminal + JSON
-reports, and suite mode.
+Alpha, published on [PyPI](https://pypi.org/project/pytest-flakedoctor/).
+Working today: the subprocess engine, the full control → provoke → verify →
+counterfactual loop, all seven axes (order, interleave, time, rng, network, fs,
+hashseed), failure fingerprinting, repro blobs, the repro marker, terminal +
+JSON reports, and suite mode.
 
 Roadmap (see [DESIGN.md](DESIGN.md) for the full architecture):
 
