@@ -3,10 +3,15 @@
 These tests spawn a parent pytest which spawns diagnostic children, exactly
 as a user would. They are the slowest tests in the suite (~1-2 minutes total).
 
-The hashseed corpus is calibrated for CPython 3.11+ (siphash13 string
-hashing): with the fruit set below, PYTHONHASHSEED=0 puts "banana" first
-(fails), =1 puts "date" first (passes), and random seeds fail ~55% of the
-time — so a 10-run baseline is virtually guaranteed to be MIXED.
+The hashseed corpus is calibrated to be attributable on BOTH string-hash
+algorithms CPython ships: siphash24 (<=3.10) and siphash13 (>=3.11). With the
+fruit set and failing subset below, PYTHONHASHSEED=0 puts a *failing* element
+first on both ("elderberry" on 3.10, "banana" on 3.11+), so the doctor's first
+provocation seed reproduces the flake on every supported version — and random
+seeds fail ~50% of the time, so a 10-run baseline is virtually guaranteed to be
+MIXED. (Earlier this only held on 3.11+, which made the diagnosis flaky on 3.10:
+its seeds 0/1/2 all landed on passing elements, leaving provocation to two
+random seeds.)
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ HASHSEED_FLAKY = '''\
 def test_first_fruit():
     fruits = {"apple", "banana", "cherry", "date", "elderberry", "fig"}
     first = next(iter(fruits))
-    assert first not in {"apple", "banana", "cherry"}
+    assert first not in {"apple", "banana", "elderberry"}
 '''
 
 STABLE = "def test_stable():\n    assert 1 + 1 == 2\n"

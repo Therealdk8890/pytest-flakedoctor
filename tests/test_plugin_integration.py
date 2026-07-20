@@ -19,7 +19,7 @@ from _support import pytest_argv  # noqa: E402  (tests dir is on sys.path)
 FLAKY_BODY = '''\
 def test_first_fruit():
     fruits = {"apple", "banana", "cherry", "date", "elderberry", "fig"}
-    assert next(iter(fruits)) not in {"apple", "banana", "cherry"}
+    assert next(iter(fruits)) not in {"apple", "banana", "elderberry"}
 '''
 
 STABLE_BODY = "def test_ok():\n    assert True\n"
