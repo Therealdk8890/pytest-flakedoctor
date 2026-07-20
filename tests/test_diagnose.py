@@ -13,6 +13,7 @@ from flakedoctor._diagnose import (
     HANGS,
     INCOMPLETE,
     NOT_FLAKY,
+    SIDE_EFFECTS_HELD,
     SKIPPED,
     USAGE_ERROR,
     Diagnosis,
@@ -1001,3 +1002,55 @@ def test_interleave_blocked_schedule_is_inconclusive_not_a_race():
     d = diagnose("t.py::t", runner, DoctorSettings(runs=4))
     assert d.verdict != FLAKY_INTERLEAVE
     assert any("inconclusive" in w for w in d.warnings)
+
+
+# ------------------------------------------------- side-effect safety gate
+
+def _runner_with_side_effects(effects):
+    def runner(probe, timeout):
+        r = RunRecord(probe.label, "pass", None, 0.01, 0)
+        if probe.label.startswith("baseline"):
+            r.side_effects = effects
+        return r
+    return runner
+
+
+def test_side_effects_gate_halts_after_one_run():
+    """A first run that made real network calls must stop the diagnosis dead —
+    exactly one execution, before the dozens of reruns repeat the side effect."""
+    calls = []
+
+    def runner(probe, timeout):
+        calls.append(probe.label)
+        r = RunRecord(probe.label, "pass", None, 0.01, 0)
+        r.side_effects = {"network": ["api.example.com:443"], "subprocess": []}
+        return r
+
+    d = diagnose(NODEID, runner, DoctorSettings(runs=10))
+    assert d.verdict == SIDE_EFFECTS_HELD
+    assert d.total_runs == 1
+    assert len(calls) == 1
+    assert "api.example.com:443" in d.explanation
+    assert "--doctor-allow-side-effects" in d.explanation
+
+
+def test_side_effects_gate_reports_subprocesses():
+    d = diagnose(NODEID, _runner_with_side_effects({"network": [], "subprocess": ["git"]}),
+                 DoctorSettings(runs=6))
+    assert d.verdict == SIDE_EFFECTS_HELD
+    assert "git" in d.explanation
+
+
+def test_side_effects_gate_bypassed_by_flag():
+    """--doctor-allow-side-effects proceeds to a full diagnosis."""
+    d = diagnose(NODEID, _runner_with_side_effects({"network": ["api.example.com:443"], "subprocess": []}),
+                 DoctorSettings(runs=4, allow_side_effects=True))
+    assert d.verdict != SIDE_EFFECTS_HELD
+    assert d.total_runs > 1
+
+
+def test_no_side_effects_proceeds_normally():
+    d = diagnose(NODEID, _runner_with_side_effects({"network": [], "subprocess": []}),
+                 DoctorSettings(runs=4))
+    assert d.verdict != SIDE_EFFECTS_HELD
+    assert d.total_runs > 1

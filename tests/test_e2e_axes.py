@@ -208,3 +208,74 @@ def test_stable_test_survives_every_axis(tmp_path):
     _, payload = _diagnose(tmp_path, STABLE, "test_corpus.py::test_ok", extra=("--doctor-runs", "4"))
     assert payload["verdict"] == "not-flaky", payload["headline"]
     assert payload["repro"] is None
+
+
+# ------------------------------------------------- side-effect safety gate
+
+SPAWNS_SUBPROCESS = (
+    "import subprocess, sys\n\n\n"
+    "def test_calls_out():\n"
+    "    subprocess.run([sys.executable, '-c', 'pass'], check=True)\n"
+    "    assert True\n"
+)
+
+CONNECTS_EXTERNAL = (
+    "import socket\n\n\n"
+    "def test_external():\n"
+    "    s = socket.socket()\n"
+    "    s.settimeout(0.2)\n"
+    "    try:\n"
+    "        s.connect(('192.0.2.1', 80))  # RFC5737 TEST-NET, non-routable\n"
+    "    except OSError:\n"
+    "        pass\n"
+    "    finally:\n"
+    "        s.close()\n"
+    "    assert True\n"
+)
+
+CONNECTS_LOOPBACK = (
+    "import socket\n\n\n"
+    "def test_loopback():\n"
+    "    s = socket.socket()\n"
+    "    s.settimeout(0.1)\n"
+    "    try:\n"
+    "        s.connect(('127.0.0.1', 1))  # loopback: exempt\n"
+    "    except OSError:\n"
+    "        pass\n"
+    "    finally:\n"
+    "        s.close()\n"
+    "    assert True\n"
+)
+
+
+def test_side_effect_subprocess_is_held(tmp_path):
+    """A test that spawns a subprocess is held after ONE run, not re-run dozens."""
+    _, payload = _diagnose(tmp_path, SPAWNS_SUBPROCESS, "test_corpus.py::test_calls_out")
+    assert payload["verdict"] == "held-side-effects", payload["headline"]
+    assert payload["total_runs"] == 1
+    assert "python" in str(payload["stats"]["side_effects"]["subprocess"]).lower()
+
+
+def test_side_effect_network_is_held(tmp_path):
+    _, payload = _diagnose(tmp_path, CONNECTS_EXTERNAL, "test_corpus.py::test_external")
+    assert payload["verdict"] == "held-side-effects"
+    assert payload["stats"]["side_effects"]["network"] == ["192.0.2.1:80"]
+
+
+def test_side_effect_gate_bypassed_by_flag(tmp_path):
+    """--doctor-allow-side-effects proceeds past the gate to a full diagnosis."""
+    _, payload = _diagnose(
+        tmp_path, SPAWNS_SUBPROCESS, "test_corpus.py::test_calls_out",
+        extra=("--doctor-allow-side-effects", "--doctor-runs", "4"),
+    )
+    assert payload["verdict"] != "held-side-effects"
+    assert payload["total_runs"] > 1
+
+
+def test_loopback_connection_is_not_held(tmp_path):
+    """Local test servers are common; a loopback connection must not be flagged."""
+    _, payload = _diagnose(
+        tmp_path, CONNECTS_LOOPBACK, "test_corpus.py::test_loopback",
+        extra=("--doctor-runs", "4"),
+    )
+    assert payload["verdict"] != "held-side-effects"

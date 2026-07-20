@@ -128,6 +128,21 @@ Two gates, both learned the hard way from review findings:
 Similarly, any provocation failure that goes unattributed is surfaced rather
 than dropped: "not-flaky" is only ever printed when nothing failed anywhere.
 
+### The side-effect safety gate (IMPLEMENTED)
+
+A diagnosis runs the test 50+ times. If the test talks to a real service or
+spawns processes, that is 50+ charges/emails/writes. The child probe wraps
+`socket.socket.connect`/`connect_ex` (non-loopback destinations only) and
+`subprocess.Popen.__init__`, scoped to the target test's own runtest protocol
+(`logstart`→`logfinish`, so pytest's own startup and the doctor's machinery
+don't count), and reports what it saw. The engine checks the **first** baseline
+run: if it had side effects and `--doctor-allow-side-effects` was not passed, it
+returns a `held-side-effects` verdict after that **single** execution — the
+minimum needed to detect the effect at all. Loopback is exempt (local test
+servers are the common case). Detection is deliberately conservative — raw file
+writes, C-level I/O, and `os.system` are not covered — because a gate that
+cries wolf trains users to always pass the flag, defeating its purpose.
+
 ### Fingerprints
 
 Identity = `(phase, exception type, crash site)`. The normalized message is

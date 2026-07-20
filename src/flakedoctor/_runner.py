@@ -104,6 +104,10 @@ class RunRecord:
     # Interleave-axis meta from an explore/replay run (see _probe): the found
     # schedule and search facts. None on non-interleave runs.
     interleave: dict | None = None
+    # Outbound network / subprocess side effects the test triggered on this run
+    # ({"network": [...], "subprocess": [...]}); the safety gate reads the first
+    # baseline run's. None when the probe reported nothing.
+    side_effects: dict | None = None
 
     @property
     def failed(self) -> bool:
@@ -453,6 +457,8 @@ def _attach_meta(record: RunRecord, meta: dict) -> None:
     record.is_unittest = bool(meta.get("is_unittest"))
     if meta.get("interleave") is not None:
         record.interleave = meta.get("interleave")
+    if meta.get("side_effects") is not None:
+        record.side_effects = meta.get("side_effects")
     if record.probe_error and not record.detail:
         record.detail = record.probe_error
     if record.teardown_error:
@@ -506,6 +512,8 @@ def _read_records(result_path: str) -> tuple[dict[str, dict], dict]:
                         existing["is_unittest"] = rec["is_unittest"]
                     if "interleave" in rec:
                         existing["interleave"] = rec["interleave"]
+                    if "side_effects" in rec:
+                        existing["side_effects"] = rec["side_effects"]
                     continue
                 last_node = node
                 per_node.setdefault(node, {})[rec.get("when", "?")] = rec

@@ -39,6 +39,7 @@ SKIPPED = "skipped"
 USAGE_ERROR = "usage-error"
 CHILD_ERROR = "child-error"
 INCOMPLETE = "incomplete"
+SIDE_EFFECTS_HELD = "held-side-effects"
 
 
 def flaky_verdict(axis_id: str) -> str:
@@ -64,6 +65,10 @@ class DoctorSettings:
     sweep_reps: int = 2
     max_verified_candidates: int = 2
     thorough: bool = False
+    # When False (default), halt after the FIRST run if that run made outbound
+    # network connections or spawned subprocesses, rather than repeating those
+    # side effects across dozens of diagnostic runs.
+    allow_side_effects: bool = False
 
 
 @dataclass
@@ -371,6 +376,12 @@ def _phase_baseline(nodeid: str, session: _Session) -> _Baseline | Diagnosis:
         # A misconfigured run repeats identically — don't burn the whole budget.
         if index == 0 and record.outcome in ("usage-error", "no-tests", "skipped"):
             break
+        # Safety gate: if the very first run had side effects (real network
+        # calls, spawned processes), stop before repeating them dozens of times.
+        if index == 0 and not settings.allow_side_effects:
+            held = _side_effects_gate(session, nodeid, record)
+            if held is not None:
+                return held
     if not records:
         return _incomplete(session, nodeid)
 
@@ -495,6 +506,49 @@ def _phase_baseline(nodeid: str, session: _Session) -> _Baseline | Diagnosis:
             stats={"baseline": stats},
         )
     return _Baseline(completed, excluded, n, f_count, dominant, stats)
+
+
+def _side_effects_gate(session: _Session, nodeid: str, record: RunRecord) -> Diagnosis | None:
+    """Halt after the first run if it had side effects the user hasn't allowed.
+
+    Returns a held Diagnosis (only one execution happened), or None to proceed.
+    """
+    effects = record.side_effects or {}
+    network = effects.get("network") or []
+    subprocs = effects.get("subprocess") or []
+    if not network and not subprocs:
+        return None
+
+    observed = []
+    if network:
+        shown = ", ".join(network[:3]) + (", …" if len(network) > 3 else "")
+        observed.append(f"opened outbound network connections ({shown})")
+    if subprocs:
+        shown = ", ".join(subprocs[:3]) + (", …" if len(subprocs) > 3 else "")
+        observed.append(f"spawned subprocesses ({shown})")
+    what = " and ".join(observed)
+
+    session.evidence.append(
+        EvidenceRow("baseline run 1 (side-effect probe)", 1, 0, "held: side effects observed")
+    )
+    return _finish(
+        session,
+        nodeid,
+        verdict=SIDE_EFFECTS_HELD,
+        claim="none",
+        headline="held — the test has side effects",
+        explanation=(
+            f"On its first run this test {what}. flakedoctor diagnoses a flake by re-running "
+            "the test many times (typically 50 or more) in fresh subprocesses, which would "
+            "repeat those side effects — duplicate API calls, charges, emails, or writes. It "
+            "stopped after a single run.\n\n"
+            "If the test is safe to repeat (it talks to a local server or a throwaway "
+            "sandbox), re-run with --doctor-allow-side-effects. Otherwise isolate the side "
+            "effect first (mock the client, point it at a fixture) — the diagnosis is then "
+            "both safe and faster."
+        ),
+        stats={"side_effects": {"network": network, "subprocess": subprocs}},
+    )
 
 
 # ---------------------------------------------------------- order axis

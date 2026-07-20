@@ -67,6 +67,7 @@ Options (also settable via ini):
 | `--doctor-runs=N` | 10 | baseline sample size |
 | `--doctor-budget=SECS` | 300 | wall-clock budget; the planner degrades gracefully |
 | `--doctor-json=PATH` | — | machine-readable `flakedoctor-report` v1 (CI artifact) |
+| `--doctor-allow-side-effects` | off | run even if the test makes network calls or spawns processes (see below) |
 
 ## Axes
 
@@ -214,9 +215,15 @@ Roadmap (see [DESIGN.md](DESIGN.md) for the full architecture):
 
 Known gaps, stated plainly: async tests skip the clock axis (a virtual clock
 hangs awaited sleeps), and async-wait is a large share of real-world flakes;
-a time-based repro may not transfer across machines unless `TZ` is set, which
-the report warns about; and re-running a side-effectful test dozens of times
-is not yet gated behind a safety check.
+and a time-based repro may not transfer across machines unless `TZ` is set,
+which the report warns about.
+
+Side effects are gated: if the first run makes an outbound network connection
+(to a non-loopback host) or spawns a subprocess, the doctor stops after that
+single run rather than repeating the effect across dozens — pass
+`--doctor-allow-side-effects` to proceed when the test is safe to repeat.
+(Detection is conservative: it covers `socket.connect` and `subprocess`, not
+raw file writes or C-level I/O.)
 
 ## Development
 

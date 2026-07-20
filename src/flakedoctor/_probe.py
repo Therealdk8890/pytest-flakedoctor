@@ -78,6 +78,87 @@ def _install_thread_counter() -> None:
 _install_thread_counter()
 
 
+# Side-effect detection. The doctor re-runs a test dozens of times; if the test
+# talks to a real service or spawns processes, repeating it could do real
+# damage. The first baseline run reports what outbound network connections and
+# subprocess spawns it observed, and the engine gates on that. Detection is
+# scoped to the target test's own runtest protocol (setup + call + teardown) via
+# _detecting, so pytest's own startup does not count.
+_detecting = False
+_side_effects: dict[str, list[str]] = {"network": [], "subprocess": []}
+_SIDE_EFFECT_CAP = 20
+
+
+def _note_side_effect(kind: str, detail: str) -> None:
+    if not _detecting:
+        return
+    bucket = _side_effects[kind]
+    if detail not in bucket and len(bucket) < _SIDE_EFFECT_CAP:
+        bucket.append(detail)
+
+
+def _is_loopback(host: object) -> bool:
+    if not isinstance(host, str):
+        return False
+    return host in ("127.0.0.1", "::1", "localhost", "") or host.startswith("127.")
+
+
+def _install_side_effect_detectors() -> None:
+    import socket
+    import subprocess
+
+    def note_connect(sock, address):
+        try:
+            if getattr(sock, "family", None) in (socket.AF_INET, socket.AF_INET6) and isinstance(
+                address, tuple
+            ):
+                host = address[0]
+                if not _is_loopback(host):
+                    port = address[1] if len(address) > 1 else "?"
+                    _note_side_effect("network", f"{host}:{port}")
+        except Exception:
+            pass
+
+    if not getattr(socket.socket.connect, "__flakedoctor_wrapped__", False):
+        orig_connect = socket.socket.connect
+        orig_connect_ex = socket.socket.connect_ex
+
+        def watched_connect(self, address, *a, **k):
+            note_connect(self, address)
+            return orig_connect(self, address, *a, **k)
+
+        def watched_connect_ex(self, address, *a, **k):
+            note_connect(self, address)
+            return orig_connect_ex(self, address, *a, **k)
+
+        watched_connect.__flakedoctor_wrapped__ = True  # type: ignore[attr-defined]
+        watched_connect_ex.__flakedoctor_wrapped__ = True  # type: ignore[attr-defined]
+        socket.socket.connect = watched_connect  # type: ignore[method-assign]
+        socket.socket.connect_ex = watched_connect_ex  # type: ignore[method-assign]
+
+    if not getattr(subprocess.Popen.__init__, "__flakedoctor_wrapped__", False):
+        orig_popen_init = subprocess.Popen.__init__
+
+        def watched_popen_init(self, args, *a, **k):
+            try:
+                if isinstance(args, (list, tuple)) and args:
+                    prog = str(args[0])
+                else:
+                    text = str(args).strip()
+                    prog = text.split()[0] if text else text
+                # Show the program's basename, not a full interpreter path.
+                _note_side_effect("subprocess", (os.path.basename(prog) or prog)[:80])
+            except Exception:
+                pass
+            return orig_popen_init(self, args, *a, **k)
+
+        watched_popen_init.__flakedoctor_wrapped__ = True  # type: ignore[attr-defined]
+        subprocess.Popen.__init__ = watched_popen_init  # type: ignore[method-assign]
+
+
+_install_side_effect_detectors()
+
+
 def _record(payload: dict) -> None:
     path = os.environ.get("FLAKEDOCTOR_RESULT_FILE")
     if not path:
@@ -154,6 +235,37 @@ def is_async_test(item) -> bool:
 
 def _applied_axes(kwargs: dict) -> list[str]:
     return [axis for key, axis in _SUBSYSTEM_AXES if kwargs.get(key, "off") != "off"]
+
+
+def _is_target(nodeid: str) -> bool:
+    nodeids = _CONFIG.get("nodeids") or []
+    return bool(nodeids) and nodeid == nodeids[-1]
+
+
+def pytest_runtest_logstart(nodeid, location):
+    # Detect side effects only for the test under diagnosis, across its whole
+    # protocol (setup runs session/module fixtures, which may connect too).
+    global _detecting
+    if _is_target(nodeid):
+        _side_effects["network"].clear()
+        _side_effects["subprocess"].clear()
+        _detecting = True
+
+
+def pytest_runtest_logfinish(nodeid, location):
+    global _detecting
+    if _is_target(nodeid):
+        _detecting = False
+        _record(
+            {
+                "nodeid": nodeid,
+                _META: True,
+                "side_effects": {
+                    "network": list(_side_effects["network"]),
+                    "subprocess": list(_side_effects["subprocess"]),
+                },
+            }
+        )
 
 
 @pytest.hookimpl(hookwrapper=True)

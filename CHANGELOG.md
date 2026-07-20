@@ -6,6 +6,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A side-effect safety gate.** If a test's first run makes an outbound network
+  connection (to a non-loopback host) or spawns a subprocess, the doctor now
+  stops after that single run instead of repeating the effect across the dozens
+  of runs a diagnosis needs — so pointing it at a test that charges a card,
+  sends email, or writes to a real service no longer does so 50 times. Pass
+  `--doctor-allow-side-effects` to proceed when the test is safe to repeat (a
+  local server, a throwaway sandbox). Detection is conservative: it covers
+  `socket.connect` and `subprocess`, not raw file writes or C-level I/O.
+
 ## [0.1.1] — 2026-07-20
 
 ### Changed

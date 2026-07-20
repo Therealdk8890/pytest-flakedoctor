@@ -68,6 +68,13 @@ def pytest_addoption(parser):
         help="sweep every axis instead of stopping at the first confirmed repro",
     )
     group.addoption(
+        "--doctor-allow-side-effects",
+        action="store_true",
+        default=False,
+        help="run even if the test makes real network calls or spawns processes; "
+        "by default the doctor halts after one run rather than repeating side effects",
+    )
+    group.addoption(
         "--doctor-repro",
         default=None,
         metavar="BLOB",
@@ -500,7 +507,10 @@ class _DoctorPlugin:
             config.getini("doctor_json") or None
         )
         self.settings = DoctorSettings(
-            runs=runs, budget=budget, thorough=bool(config.getoption("--doctor-thorough"))
+            runs=runs,
+            budget=budget,
+            thorough=bool(config.getoption("--doctor-thorough")),
+            allow_side_effects=bool(config.getoption("--doctor-allow-side-effects")),
         )
         self.items: list = []
         self.diagnosis = None
