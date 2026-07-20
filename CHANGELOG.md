@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-07-20
+
 ### Changed
 
 - **Stabilization and elevation significance now use a one-sided Fisher exact
@@ -18,6 +20,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Clopper–Pearson bound), but it conflicted with the project's core promise of
   never claiming more than the evidence supports. A 5/10 baseline now correctly
   needs 7 clean control runs, not 5, before a stabilizer is called conclusive.
+
+### Fixed
+
+- Documentation: added an install section, corrected the axis count (seven, not
+  five/six), and removed the "not yet on PyPI" line now that the package is
+  published.
 
 ## [0.1.0] — 2026-07-20
 
@@ -64,5 +72,6 @@ numbers don't support, and it says "I don't know" when they don't.
   modelled primitives" rather than "no race exists" — import-time primitives,
   thread-pool internals, and C-level threads are outside what it models.
 
-[Unreleased]: https://github.com/Therealdk8890/pytest-flakedoctor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Therealdk8890/pytest-flakedoctor/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Therealdk8890/pytest-flakedoctor/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Therealdk8890/pytest-flakedoctor/releases/tag/v0.1.0
