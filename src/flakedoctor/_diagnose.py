@@ -1312,6 +1312,10 @@ def _phase_verify(
                 confirmed = (value, matched_dominant, records)
             if not settings.thorough:
                 break
+            # This candidate already has a deterministic-verification row.
+            # Do not also classify the same fully failing sample as a mere
+            # failure-rate elevation.
+            continue
         session.evidence.append(
             EvidenceRow(
                 f"VERIFY: {value.described()}",
