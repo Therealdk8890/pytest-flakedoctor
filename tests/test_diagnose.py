@@ -1054,3 +1054,37 @@ def test_no_side_effects_proceeds_normally():
                  DoctorSettings(runs=4))
     assert d.verdict != SIDE_EFFECTS_HELD
     assert d.total_runs > 1
+
+def test_thorough_verifies_candidates_beyond_default_limit():
+    """Thorough mode continues across axes after finding the first confirmed cause."""
+    runner = FakeRunner(
+        [
+            ("baseline", ["pass", ("fail", FP)]),
+            ("control: all axes", [("fail", FP), "pass"]),
+            ("control: time", ["pass"]),
+            ("control: rng", [("fail", FP), "pass"]),
+            ("provoke: PYTHONHASHSEED=0", [("fail", FP)]),
+            ("verify: PYTHONHASHSEED=0", [("fail", FP)]),
+            ("provoke: time frozen", [("fail", FP)]),
+            ("verify: time frozen", [("fail", FP)]),
+            ("provoke: rng seeded", [("fail", FP)]),
+            ("verify: rng seeded", [("fail", FP)]),
+            ("provoke: network blocked", [("fail", FP)]),
+            ("verify: network blocked", [("fail", FP)]),
+            ("provoke: filesystem isolated", [("fail", FP)]),
+            ("verify: filesystem isolated", [("fail", FP)]),
+            ("counterfactual", ["pass"]),
+        ]
+    )
+
+    d = run(runner, thorough=True)
+
+    # The earliest verified cause remains the headline and reproduction.
+    assert d.verdict == FLAKY_HASHSEED
+    # Thorough mode bypasses the default two-candidate cap and keeps gathering
+    # verified evidence from later axes.
+    assert runner.labels_matching("verify: time frozen")
+    assert runner.labels_matching("verify: rng seeded")
+    assert runner.labels_matching("verify: network blocked")
+    assert runner.labels_matching("verify: filesystem isolated")
+
