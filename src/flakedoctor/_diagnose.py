@@ -1280,7 +1280,12 @@ def _phase_verify(
     best_elevation = None
     attempts = 0
     for value, _swept_match in candidates:
-        if session.exhausted or attempts >= settings.max_verified_candidates:
+        # Normal mode bounds work and stops at the first confirmed cause.
+        # Thorough mode keeps verifying candidates across axes until the sweep
+        # finishes or the shared wall-clock budget is exhausted.
+        if session.exhausted or (
+            not settings.thorough and attempts >= settings.max_verified_candidates
+        ):
             break
         attempts += 1
         records = session.series(
@@ -1301,8 +1306,12 @@ def _phase_verify(
                     f"VERIFY: {value.described()}", len(records), len(real), "✓ deterministic"
                 )
             )
-            confirmed = (value, matched_dominant, records)
-            break
+            if confirmed is None:
+                # Preserve the first confirmed cause as the headline/repro.
+                # Thorough mode still records evidence for later axes.
+                confirmed = (value, matched_dominant, records)
+            if not settings.thorough:
+                break
         session.evidence.append(
             EvidenceRow(
                 f"VERIFY: {value.described()}",
